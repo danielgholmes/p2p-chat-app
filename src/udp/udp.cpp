@@ -19,7 +19,7 @@ int main()
     char *hostname = "localhost";
     char buffer[256];
     socklen_t addrlen = sizeof(peerAddr);
-    portno = 5000;
+    portno = 0;
 
     sockfd = socket(AF_INET, SOCK_DGRAM, 0);
     if (sockfd < 0)

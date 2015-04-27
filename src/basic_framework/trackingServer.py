@@ -8,6 +8,7 @@ import pickle
 userIPList = {}
 
 tracServer = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+#Currently set for Jonathan's PC
 tracServer.bind(("127.0.0.1",5005))
 while(1):
 

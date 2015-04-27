@@ -1,0 +1,6 @@
+Port number, Description
+
+5005, Tracking server 
+5000, Global listner port for peer
+5001, Private chat 
+5002, Group chat

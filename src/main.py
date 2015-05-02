@@ -33,6 +33,9 @@ def process_command(command):
 	elif base_command == "file":
 		send_file(command_array[1], command_array[2], command_array[3])
 
+	elif base_command == "chat":
+		display_channel_chat(command_array[1])
+
 	elif base_command == "create":
 		create_channel(command_array[1], command_array[2])
 
@@ -72,6 +75,10 @@ def send_private_message(channel, peer, message):
 
 def send_file(channel, peer, path_to_file):
 	print "Sending file at", path_to_file, "to", peer, "on channel", channel
+	pass
+
+def display_channel_chat(channel):
+	print "Displaying chat messages from channel", channel
 	pass
 
 def create_channel(channel, password):

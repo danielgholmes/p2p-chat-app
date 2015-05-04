@@ -2,19 +2,32 @@ __authors__ = 'Daniel Holmes 551240 and Jonathan Gerrand 349361'
 
 import socket
 import pickle
+import threading 
+
+def launch_channel_manager()
+
 
 class Peer(object):
     
-    def __init__(self):
+    def __init__(self, user_name = "User", IP_address = "127.0.0.1"):
         #A dictionary maintained by the indexing server
         self._peer_dict = {}
         #Structure for holding commands and arguments
         self._command_list = []
         #Name of the peer for this session
-        self._user_name = ""
+        self._user_name = user_name
         #The current IP address of the user
-        self._user_IP_address = "127.0.0.1"
+        self._user_IP_address = IP_address
+        #The message buffer size
         self.BUFFER_SIZE = 1024
+        #A counter tracking the ports currently used
+        self._port_count = 5006
+        #Container of current channels hosted by peer
+        self._channel_names = []
+        #Container of all current channel users
+        self._channel_users = []
+        #Container of all current channel text
+        self._channel_text = []
         
         
     
@@ -41,44 +54,14 @@ class Peer(object):
         self._global_listner.listen(1)
         pass
 
-    def create_new_chat(self, name):
-        join_message = []
-        join_connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        #For later use
-        #join_connection.connect((self._peer_dict[name], 5000))
-        join_connection.connect(("127.0.0.1", 5000))
-        join_message.append("JOIN")
-        join_message.append(self._user_name)
-        
-        join_connection.send(pickle.dumps(join_message))
-        join_connection.close()
-        pass
-
-    def listen_for_chats(self):
-        
-        pass
-    
-    #Name change required.
-    def private_chat(self, expected_name):
-        private_chat_connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        private_chat_connection.bind((self._user_IP_address, 5001))
-        private_chat_connection.listen(1)
-    
-        conn, addr = private_chat_connection.accept()        
-        if (addr == self._peer_dict[expected_name]):
-            
-            message = ''
-            message = conn.recv(self.BUFFER_SIZE)
-            
-            while (message != 'quit'):
-            
-                pass
-        
+    def create_channel(self, channel, password):
+        #Attempt to establish a channel on a port
+        try:
             pass
+    
 
 
-#Establish new connnection fellow peer
-#update_contacts("Rodger")
+
 
 
 

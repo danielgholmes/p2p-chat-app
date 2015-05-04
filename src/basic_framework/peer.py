@@ -6,9 +6,13 @@ import pickle
 class Peer(object):
     
     def __init__(self):
+        #A dictionary maintained by the indexing server
         self._peer_dict = {}
+        #Structure for holding commands and arguments
         self._command_list = []
+        #Name of the peer for this session
         self._user_name = ""
+        #The current IP address of the user
         self._user_IP_address = "127.0.0.1"
         self.BUFFER_SIZE = 1024
         
@@ -54,6 +58,7 @@ class Peer(object):
         
         pass
     
+    #Name change required.
     def private_chat(self, expected_name):
         private_chat_connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         private_chat_connection.bind((self._user_IP_address, 5001))
@@ -63,7 +68,7 @@ class Peer(object):
         if (addr == self._peer_dict[expected_name]):
             
             message = ''
-            message = message = conn.recv(self.BUFFER_SIZE)
+            message = conn.recv(self.BUFFER_SIZE)
             
             while (message != 'quit'):
             

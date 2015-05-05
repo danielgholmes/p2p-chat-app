@@ -36,7 +36,7 @@ channel_connections = {}
 """------------------------Private functions--------------------------------"""
 def _initilize_user(user_name, protocol):
     #Launch user global listner
-    threading.Thread(target=_launch_user_global_listner, args=()).start   
+    threading.Thread(target=_launch_user_global_listner, args=()).start()   
     #Update peer dict
     _update_contacts(user_name)
     pass
@@ -56,6 +56,7 @@ def _launch_user_global_listner():
             _recieved_command = pickle.loads(conn.recv(BUFFER_SIZE))
             #Server attempts to update peer_dict
             if _recieved_command[0] == "UPDATE":
+                global peer_dict
                 peer_dict = _recieved_command[1] #Hmmm?
             #Fellow peer seeks channel list from user
             if _recieved_command[0] == "LISTCH":
@@ -178,9 +179,14 @@ def _update_contacts(name):
     #This was set for the default LAN network
     updating_connection.connect(("127.0.0.1", 5001))
     updating_connection.send(pickle.dumps(command_list))
-
-    while (len(peer_dict) == 0):
-        peer_dict = pickle.loads(updating_connection.recv(10240))
+    
+    global peer_dict
+    while len(peer_dict) == 0:
+        try:
+            peer_dict = pickle.loads(updating_connection.recv(BUFFER_SIZE))
+        except EOFError:
+            #Pickle receives an empty string, reload            
+            pass 
         
     print peer_dict
 
@@ -207,7 +213,7 @@ def create_channel(channel, password, nick_name):
         
 #Test Code
 _initilize_user("Jon", "TCP")
-create_channel("TestChan", "easy", "Working")
+create_channel("TestChan", "easy", "Gerrand")
         
         
         

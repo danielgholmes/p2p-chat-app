@@ -1,0 +1,7 @@
+Format: Name, structure, description:
+
+Notes: 
+- < > indicates a data structure
+
+1) update peer, 		["UPDATE", <peer_dict>], 	used to update the peer_dict of every peer of the chat app when a new peer joins.
+2) greet tracking server, 	["HELO", user_name],	used to indicate presence of user to tracking server.

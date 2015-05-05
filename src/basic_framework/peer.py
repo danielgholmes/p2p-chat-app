@@ -4,9 +4,6 @@ import socket
 import pickle
 import threading 
 
-def launch_channel_manager()
-
-
 class Peer(object):
     
     def __init__(self, user_name = "User", IP_address = "127.0.0.1"):

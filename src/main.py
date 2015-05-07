@@ -17,7 +17,7 @@ port_count = [5006]
 
 #A dictionary maintained by the indexing server
 #key: peer, ip address
-peers_online = {} #changed from peer_dict
+peers_online = {'Bob': '0.0.0.0'} #changed from peer_dict
 
 #A dictionary containing the names of all peers currently on a channel.
 #This container is only shared with trusted peers
@@ -26,7 +26,7 @@ channel_dict = {}
 
 #Container of current channels hosted by user
 #key: channel, list: peers and ports
-hosted_channel_names = {} # changed from channel_names
+hosted_channels = {'ble': ["Bob", "Ralph"]} # changed from channel_names
 
 #Container of all current channel peers
 #key: channel, list: peers
@@ -42,18 +42,16 @@ channel_connections = {'bla': []}
 
 #Known channels hosted by other peers available for connection, dictionary of lists
 #key: peer, list: channels
-available_channels = {}
+available_channels = {'Bob': 'bla'}
 
 #Join requests for channels hosted by the user
 #key: channel list: peers requesting
-join_requests = {}
+join_requests = {'ble': ['Bob', 'Ralph']}
 
 def display_welcome_message():
-	print "=============================================="
 	print "Welcome to the P2P Chat Application!"
 	print "Created by Jonathan Gerrand and Daniel Holmes."
 	print "2015"
-	print "=============================================="
 	print ""
 	pass
 
@@ -81,8 +79,8 @@ def process_command(command):
 			return
 		else:
 			channel = command_array[1]
+			peer = command_array[2]
 			if connected_to_channel(channel):
-				peer = command_array[2]
 				if peer_on_channel(channel, peer):
 					message = raw_input("Message: ")
 					send_private_message(channel, peer, message)
@@ -98,12 +96,12 @@ def process_command(command):
 			return
 		else:
 			channel = command_array[1]
+			peer = command_array[2]
 			if connected_to_channel(channel):
-				peer = command_array[2]
 				if peer_on_channel(channel, peer):
 					path_to_file = raw_input("File path: ")
 					send_file(channel, peer, path_to_file)
-					print "Sent file from", path, "to", peer, "on channel"
+					print "Sent file from", path_to_file, "to", peer, "on channel"
 				else:
 					return
 			else:
@@ -129,9 +127,11 @@ def process_command(command):
 			channel = command_array[1]
 			password = command_array[2]
 			nick_name = command_array[3]
-			create_channel(channel, password, nick_name)
-			print "Created", channel, "as a new channel with", password, "as the password"
-
+			if not hosting_channel(channel):
+				create_channel(channel, password, nick_name)
+				print "Created", channel, "as a new channel with", password, "as the password and nick", nick_name
+			else:
+				return
 
 	elif base_command == "join":
 		if len(command_array) != 4:
@@ -139,9 +139,10 @@ def process_command(command):
 			return
 		else:
 			channel = command_array[1]
+			peer = command_array[2]
+			nick_name = command_array[3]
 			if channel_available(channel, peer):
-				nick_name = command_array[2]
-				join_channel(channel, nick_name)
+				join_channel(channel, peer, nick_name)
 				print "Joined channel", channel, "with nickname", nick_name 
 			else:
 				return
@@ -163,7 +164,7 @@ def process_command(command):
 			print_usage()
 			return
 		else:
-			channels = command_array[1]
+			channel = command_array[1]
 			if connected_to_channel(channel):
 				get_channel_peers(channel)
 				print "Got list of peers on channel", channel
@@ -182,14 +183,14 @@ def process_command(command):
 			else:
 				return
 
-
 	elif base_command == "requests":
 		if len(command_array) != 2:
 			print_usage()
 			return
 		else:
+			channel = command_array[1]
 			if hosting_channel(channel):
-				if join_requests(channel):
+				if join_request_exists(channel):
 					show_join_requests(channel)
 					print "Displaying join requests for channel", channel
 				else:
@@ -203,10 +204,10 @@ def process_command(command):
 			return
 		else:
 			channel = command_array[1]
+			peer = command_array[2]
 			if hosting_channel(channel):
-				if join_requests(channel):
-					peer = command_array[2]
-					if peer_requesting(peer):
+				if join_request_exists(channel):
+					if peer_requesting(channel, peer):
 						accept_join_request(channel, peer)
 						print "Accepted join request from", peer, "for channel", channel
 					else:
@@ -222,8 +223,12 @@ def process_command(command):
 	elif base_command == "exit":
 		exit_application()
 
+	elif base_command == "help":
+		print_usage()
+
 	else:
 		print_command_error()
+		print_usage()
 
 def send_channel_message(channel, message):
 	pass
@@ -268,7 +273,23 @@ def exit_application():
 	pass
 
 def print_usage():
-	print "help..."
+	print "P2P Chat Application command usage."
+	print ""
+	print "help:\t\t\t\tthis help"
+	print "see which peers are online:\tonline"
+	print "send message on channel:\tmsg [channel]"
+	print "send private message:\t\tpvt [channel] [peer]"
+	print "send a file:\t\t\tfile [channel] [peer]"
+	print "display channel chat:\t\tchat [channel]"
+	print "create a new channel:\t\tcreate [channel name] [password] [nickname]"
+	print "join a channel:\t\t\tjoin [channel] [peer host] [nickname]"
+	print "see channels hosted by peer:\tchannels [peer]"
+	print "see peers on a channel:\t\tpeers [channel]"
+	print "see channel join requests:\trequests [channel]"
+	print "accept channel join request:\taccept [channel] [peer]"
+	print "leave a channel:\t\tleave [channel]"
+	print "close the application:\t\texit"
+	print "" 
 
 ################# Validation and Error checking ####################
 
@@ -285,18 +306,20 @@ def channel_available(channel, peer):
 		if channel in channels:
 			return True
 		else:
+			print "Error:", peer, "is not hosting channel", channel
 			return False
 	else:
+		print "Error:", peer, "is not hosing any channels"
 		return False
 
 def hosting_channel(channel):
-	if channel in join_requests.keys():
+	if channel in hosted_channels.keys():
 		return True
 	else:
-		print "Not hosting channel", channel
+		print "Not currently hosting channel", channel
 		return False
 
-def join_requests(channel):
+def join_request_exists(channel):
 	requests = join_requests[channel]
 	if len(requests) != 0:
 		return True
@@ -320,7 +343,7 @@ def peer_on_channel(channel, peer):
 		return False
 
 def peer_online(peer):
-	if peer in peer_online.keys():
+	if peer in peers_online.keys():
 		return True
 	else:
 		print "Error:", peer, "is not online"
@@ -334,7 +357,8 @@ display_welcome_message()
 
 user_name = raw_input("Please enter your username: ")
 protocol = raw_input("Please eneter your preferred protocol: ")
+print ""
 
 while (1):
-	command = raw_input("-> ")
+	command = raw_input(user_name + "@chat-cmd-> ")
 	process_command(command)

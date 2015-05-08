@@ -31,12 +31,13 @@ channel_users = {}
 channel_text = {}
 #Container of all outward connections for a channel
 channel_connections = {}
+"""Data containers end"""
 
 
 """------------------------Private functions--------------------------------"""
 def _initilize_user(user_name, protocol):
     #Launch user global listner
-    threading.Thread(target=_launch_user_global_listner, args=()).start   
+    threading.Thread(target=_launch_user_global_listner, args=()).start()   
     #Update peer dict
     _update_contacts(user_name)
     pass
@@ -53,32 +54,44 @@ def _launch_user_global_listner():
         
         if conn != None:
             #Process incoming messages
-            _recieved_command = pickle.loads(conn.recv(BUFFER_SIZE))
+            try:
+                _recieved_command = pickle.loads(conn.recv(BUFFER_SIZE))
+            except EOFError:
+                print "Global listner received a blank command."
+                
             #Server attempts to update peer_dict
             if _recieved_command[0] == "UPDATE":
-                peer_dict = _recieved_command[1] #Hmmm?
+                global peer_dict
+                peer_dict = _recieved_command[1] 
             #Fellow peer seeks channel list from user
             if _recieved_command[0] == "LISTCH":
                 _returned_command = []
                 _returned_command.append(channel_names)
+                conn.send(pickle.dumps(_returned_command))
+    pass
+
+def _create_connection_to_listner(channel_name, peer_IP_address, 
+                                  peer_port_num, send_command):
+    peer_con = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        peer_con.connect((peer_IP_address, peer_port_num))
+        peer_con.send(pickle.dumps(send_command))
+    finally:
+        global channel_connections
+        channel_connections[channel_name].append(peer_con)
     pass
             
-        
-        
-
 def _create_listening_connection(channel_name, password, user_nik):
     #connection variables
     _connection_command = None
-    _trusted_address = None
-    channel_connections[channel_name] = []
+    _trusted_address = {}
+
     try:
         listen_connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         listen_connection.bind((user_IP_address, port_count[0]))
     finally:
-        #Update the channel dict
-        channel_dict[channel_name] = []
-        #channel_dict: user_nik, IP addr, port
-        channel_dict[channel_name].append([user_nik, user_IP_address, 
+        #channel_dict: IP addr, port
+        channel_dict[channel_name].append([user_IP_address, 
                                            port_count[0]])
         port_count[0] += 1
         
@@ -90,34 +103,45 @@ def _create_listening_connection(channel_name, password, user_nik):
             if conn != None:
                 _connection_command = pickle.loads(conn.recv(BUFFER_SIZE))
                 
-                #The trusted peer sends a message
-                if _trusted_address == addr:
-                    channel_text[channel_name].append(_connection_command[0])
+                #A trusted peer sends a message -> Short validation and save text
+                if addr[0] in _trusted_address.keys():
+                    channel_text[channel_name].append(
+                    _trusted_address[addr[0]] + " :" + _connection_command[0])
                 
                 #The correct peer has responded
                 #_connection_command: password, IP addr, port, peer_nik
                 if _connection_command[0] == password:
-                    _trusted_address = addr
+                    _trusted_address[addr[0]] = _connection_command[3]
+                    
                     #Create an outward connection to peer
                     try:
                         out_conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                         out_conn.connect((_connection_command[1], _connection_command[2]))
                     finally:
-                        #Update the channel dict
-                        channel_dict[channel_name].append([_connection_command[3],
-                                                          _connection_command[1],
-                                                          _connection_command[2]])
+                        #Update the channel dict if user is not already recorded
+                        found = False
+                        for item in channel_dict[channel_name]:
+                            if addr[0] in item:
+                                found = True
+                        #IP address not in the record
+                        if found != True:
+                            channel_dict[channel_name].append(
+                            [_connection_command[1],_connection_command[2]])
+                                                          
                         #Store this connection in channel_connections dict.
                         channel_connections[channel_name].append(out_conn)
                         channel_text[channel_name].append(_connection_command[3] + 
                                                           "Joined the channel.")
+                        
+                        
     pass
 
 
 def _launch_channel_manager(name, password, user_nik):
     #channel variables
-    _channel_name = name
     _channel_command = None
+    #Update the channel dict
+    channel_dict[name] = []
     
     try:
         #Create channel server (TCP)
@@ -155,12 +179,13 @@ def _launch_channel_manager(name, password, user_nik):
             
             #--Evaluate command--
             #Command structure - command, channel_name, peer's name
-            if (_channel_command[0] == "JOIN") and (_channel_command[1] == _channel_name):
+            if (_channel_command[0] == "JOIN") and (_channel_command[1] == name):
                #Successful -> Must make decision to let peer join!!
+               #TODO Include functionality for a rejection command
                _reply_command = []
                _reply_command.append("PASS")
                _reply_command.append(password)
-               _reply_command.append(channel_dict)
+               _reply_command.append(channel_dict[name])
                conn.send(pickle.dumps(_reply_command))
                pass
                 
@@ -178,14 +203,84 @@ def _update_contacts(name):
     #This was set for the default LAN network
     updating_connection.connect(("127.0.0.1", 5001))
     updating_connection.send(pickle.dumps(command_list))
-
-    while (len(peer_dict) == 0):
-        peer_dict = pickle.loads(updating_connection.recv(10240))
+    
+    global peer_dict
+    while len(peer_dict) == 0:
+        try:
+            peer_dict = pickle.loads(updating_connection.recv(BUFFER_SIZE))
+        except EOFError:
+            #Pickle receives an empty string, reload            
+            pass 
         
     print peer_dict
 
     updating_connection.close()
     pass
+
+def _join_channel(channel_name, user_nickname):
+    #Channel variables
+    _received_channel_password = ""
+    _received_command = []
+    _send_command = []
+    _contact_dictionary = None
+    
+    #Fill send command structure to send
+    _send_command.append("JOIN")
+    _send_command.append(channel_name)
+    
+    #Send request to channel host
+    join_conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        join_conn.connect((channel_names[channel_name][0], channel_names[channel_name][1]))
+    finally:
+        join_conn.send(pickle.dumps(_send_command))
+        
+        #Wait for reply from channel host
+        while len(_received_command) == 0:
+            try:
+                _received_command = pickle.loads(join_conn.recv(BUFFER_SIZE))
+            except EOFError:
+                #Pickle receives an empty string, reload 
+                pass
+            
+            #Unpack received response
+            if _received_command[0] == "PASS":
+                _received_channel_password = _received_command[1]
+                _contact_dictionary = _received_command[2]
+            else: 
+                print "Your request to join: " + channel_name + ", has been rejected" 
+    
+    #Add current connection to the channel connections container
+    channel_connections[channel_name].append(join_conn)
+                
+    #Launch personal listening server thread for the channel
+    threading.Thread(target=_create_listening_connection, args=(channel_name,),
+                     kwargs={'password':_received_channel_password, 
+                     'user_nik':user_nickname}).start()
+    
+    #Establish connections to all peers in channel
+    _send_command = []
+    _send_command.append(_received_channel_password)
+    _send_command.append(user_IP_address)
+    _send_command.append(port_count[0]-1)
+    for peer in _contact_dictionary:
+        #Create connection to peer
+        _create_connection_to_listner(channel_name, peer[0], 
+                                      peer[1], _send_command)
+
+    pass
+
+#TODO functions
+def _display_channel_text(channel_name):
+    pass
+
+def _list_peer_channels(peer_name):
+    pass
+
+def _write_text_to_channel(channel_name, text):
+    pass
+
+    
 """------------------------end private functions----------------------------"""
         
 """-------------------------Public functions--------------------------------"""
@@ -199,7 +294,8 @@ def create_channel(channel, password, nick_name):
                           kwargs = {'password':password, 
                           'user_nik':nick_name}).start()
      finally:
-         print "Created *", channel, "* as a new channel with", password, "as the password" 
+         print ("Created *"+channel+"* as a new channel with '"+password+
+                "' as the password.") 
      pass
      
 """-------------------------end public functions----------------------------"""
@@ -207,8 +303,9 @@ def create_channel(channel, password, nick_name):
         
 #Test Code
 _initilize_user("Jon", "TCP")
-create_channel("TestChan", "easy", "Working")
-        
+create_channel("TestChan", "easy", "Gerrand")
+create_channel("Bobby_channel", "peasy", "David")
+_join_channel("TestChan", "squiddle")        
         
         
         

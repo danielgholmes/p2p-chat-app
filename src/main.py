@@ -42,11 +42,15 @@ channel_connections = {'bla': []}
 
 #Known channels hosted by other peers available for connection, dictionary of lists
 #key: peer, list: channels
-available_channels = {'Bob': 'bla'}
+available_channels = {'Bob': ['channel1', 'channel2']}
 
 #Join requests for channels hosted by the user
 #key: channel list: peers requesting
 join_requests = {'ble': ['Bob', 'Ralph']}
+
+#All channel chat
+#key: channel list: chat 
+channel_chat = {'bla': ["Bob: Hello Ralph!", "Ralph: Hello Bob!"]}
 
 def display_welcome_message():
 	print "Welcome to the P2P Chat Application!"
@@ -154,7 +158,7 @@ def process_command(command):
 		else:
 			peer = command_array[1]
 			if peer_online(peer):
-				get_peer_channels(peer)
+				show_peer_channels(peer)
 				print "Got list of channels hosted by peer", peer 
 			else:
 				return
@@ -166,7 +170,7 @@ def process_command(command):
 		else:
 			channel = command_array[1]
 			if connected_to_channel(channel):
-				get_channel_peers(channel)
+				show_channel_peers(channel)
 				print "Got list of peers on channel", channel
 			else:
 				return
@@ -230,6 +234,8 @@ def process_command(command):
 		print_command_error()
 		print_usage()
 
+############# Functions with threading ######################
+
 def send_channel_message(channel, message):
 	pass
 
@@ -239,32 +245,53 @@ def send_private_message(channel, peer, message):
 def send_file(channel, peer, path_to_file):
 	pass
 
-def display_channel_chat(channel):
-	pass
-
 def create_channel(channel, password, nick_name):
 	pass
 
 def join_channel(channel, peer, nick_name):
 	pass
 
-def get_peer_channels(peer):
-	pass
-
-def get_channel_peers(channel):
-	pass
-
 def leave_channel(channel):
-	pass
-
-def show_join_requests(channel):
 	pass
 
 def accept_join_request(channel, peer):
 	pass
 
+############################################################
+
+def display_channel_chat(channel):
+	chat = channel_chat[channel]
+	print "Chat for channel", channel
+	for c in chat:
+		print c
+	pass
+
+def show_peer_channels(peer):
+	channels = available_channels[peer]
+	print "Channels hosted by", peer
+	for c in channels:
+		print c
+	pass
+
+def show_channel_peers(channel):
+	peers = channel_peers[channel]
+	print "Peers on channel", channel, ":"
+	for p in peers:
+		print p	
+	pass
+
+def show_join_requests(channel):
+	requesting_peers =  join_requests[channel]
+	print "Join requests for channel", channel, ":"
+	for r in requesting_peers:
+		print r
+	pass
+
 def show_online_peers():
-	print "The following peers are online:"
+	peers = peers_online.keys()
+	print "Peers online:"
+	for p in peers:
+		print p
 	pass
 
 def exit_application():

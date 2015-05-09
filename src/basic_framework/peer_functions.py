@@ -30,8 +30,6 @@ channel_names = {}
 channel_users = {}
 #Container of all current channel text
 channel_text = {}
-#Container of all outward connections for a channel
-channel_connections = {}
 """Data containers end"""
 
 
@@ -79,8 +77,6 @@ def _create_connection_to_listner(channel_name, peer_IP_address,
         peer_con.connect((peer_IP_address, peer_port_num))
         peer_con.send(pickle.dumps(send_command))
     finally:
-        global channel_connections
-        channel_connections[channel_name].append(peer_con)
         print "Connection in channel - "+channel_name+" succesful!"
     pass
             
@@ -134,9 +130,9 @@ def _create_listening_connection(channel_name, password, user_nik):
                             channel_dict[channel_name].append(
                             [_connection_command[1],_connection_command[2]])
                                                           
-                        #Store this connection in channel_connections dict.
-                        channel_connections[channel_name].append(out_conn)
-                        channel_text[channel_name].append(_connection_command[3] + 
+                        #Record the new peer on the channel
+                        channel_text[channel_name].append(_connection_command[3] +
+                                                          "("+user_name+")"
                                                           " Joined the channel.")
                         
                         
@@ -163,8 +159,6 @@ def _launch_channel_manager(name, password, user_nik):
         
     finally:
         #If binding was successful       
-        #Prepare connections container to hold new conns
-        channel_connections[name] = []
         #Add hosting peer to the list of people on the chat
         channel_users[name] = []
         channel_users[name].append(user_name)
@@ -255,9 +249,6 @@ def _join_channel(channel_name, user_nickname):
                 _contact_dictionary = _received_command[2]
             else: 
                 print "Your request to join: " + channel_name + ", has been rejected" 
-    
-    #Add current connection to the channel connections container
-    channel_connections[channel_name].append(join_conn)
                 
     #Launch personal listening server thread for the channel
     threading.Thread(target=_create_listening_connection, args=(channel_name,),
@@ -329,7 +320,7 @@ _write_text_to_channel("TestChan", "This is a big, fluffy dog :)")
 time.sleep(1)
 _write_text_to_channel("TestChan", "It is a cute dog.") 
 time.sleep(1)      
-
+_write_text_to_channel("TestChan", "I like it.") 
         
         
         

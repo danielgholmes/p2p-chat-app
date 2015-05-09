@@ -66,7 +66,7 @@ def process_command(command):
 
 	if base_command == "msg": #Abbreviated as this command is used often
 		if len(command_array) < 2: #If there are not enough arguments
-			print_usage()
+			print_arguments_error()
 			return
 		else:
 			channel = command_array[1]
@@ -79,7 +79,7 @@ def process_command(command):
 
 	elif base_command == "pvt": #Abbreviated as this command is used often
 		if len(command_array) < 3:
-			print_usage()
+			print_arguments_error()
 			return
 		else:
 			channel = command_array[1]
@@ -96,7 +96,7 @@ def process_command(command):
 
 	elif base_command == "file":
 		if len(command_array) !=  3:
-			print_usage()
+			print_arguments_error()
 			return
 		else:
 			channel = command_array[1]
@@ -113,19 +113,19 @@ def process_command(command):
 
 	elif base_command == "chat":
 		if len(command_array) != 2:
-			print_usage()
+			print_arguments_error()
 			return
 		else:
 			channel = command_array[1]
 			if connected_to_channel(channel):
-				display_channel_chat(channel)
+				show_channel_chat(channel)
 				print "Displaying chat messages from channel", channel
 			else:
 				return
 
 	elif base_command == "create":
 		if len(command_array) != 4:
-			print_usage()
+			print_arguments_error()
 			return
 		else:
 			channel = command_array[1]
@@ -139,7 +139,7 @@ def process_command(command):
 
 	elif base_command == "join":
 		if len(command_array) != 4:
-			print_usage()
+			print_arguments_error()
 			return
 		else:
 			channel = command_array[1]
@@ -153,7 +153,7 @@ def process_command(command):
 
 	elif base_command == "channels":
 		if len(command_array) != 2:
-			print_usage()
+			print_arguments_error()
 			return
 		else:
 			peer = command_array[1]
@@ -165,7 +165,7 @@ def process_command(command):
 
 	elif base_command == "peers":
 		if len(command_array) != 2:
-			print_usage()
+			print_arguments_error()
 			return
 		else:
 			channel = command_array[1]
@@ -177,7 +177,7 @@ def process_command(command):
 
 	elif base_command == "leave":
 		if len(command_array) != 2:
-			print_usage()
+			print_arguments_error()
 			return
 		else:
 			channel = command_array[1]
@@ -189,7 +189,7 @@ def process_command(command):
 
 	elif base_command == "requests":
 		if len(command_array) != 2:
-			print_usage()
+			print_arguments_error()
 			return
 		else:
 			channel = command_array[1]
@@ -204,7 +204,7 @@ def process_command(command):
 
 	elif base_command == "accept":
 		if len(command_array) != 3:
-			print_usage()
+			print_arguments_error()
 			return
 		else:
 			channel = command_array[1]
@@ -221,18 +221,38 @@ def process_command(command):
 			else:
 				return
 
+	elif base_command == "hosting":
+		if len(command_array) != 1:
+			print_arguments_error()
+			return
+		else:
+			if hosting_channels():
+				show_hosting_channels()
+				print "Displaying hosted channels"
+			else:
+				return
+
 	elif base_command == "online":
-		show_online_peers()
+		if len(command_array) != 1:
+			print_arguments_error()
+			return
+		else:
+			if any_peers_online():
+				show_online_peers()
+				print "Displaying peers online"
+			else:
+				return
 
 	elif base_command == "exit":
+		if len(command_array) != 1:
+			print_arguments_error()
 		exit_application()
 
 	elif base_command == "help":
-		print_usage()
+		show_help()
 
 	else:
 		print_command_error()
-		print_usage()
 
 ############# Functions with threading ######################
 
@@ -259,7 +279,9 @@ def accept_join_request(channel, peer):
 
 ############################################################
 
-def display_channel_chat(channel):
+# perhaps add a command so show all channels that the user is hosting
+
+def show_channel_chat(channel):
 	chat = channel_chat[channel]
 	print "Chat for channel", channel
 	for c in chat:
@@ -294,25 +316,33 @@ def show_online_peers():
 		print p
 	pass
 
+def show_hosting_channels():
+	channels = hosted_channels.keys()
+	print "Hosting channels:"
+	for c in channels:
+		print c
+	pass
+
 def exit_application():
 	"""Close connections, threads, etc ..."""
 	exit()
 	pass
 
-def print_usage():
-	print "P2P Chat Application command usage."
+def show_help():
+	print "P2P Chat Application command help."
 	print ""
 	print "help:\t\t\t\tthis help"
-	print "see which peers are online:\tonline"
+	print "show which peers are online:\tonline"
 	print "send message on channel:\tmsg [channel]"
 	print "send private message:\t\tpvt [channel] [peer]"
 	print "send a file:\t\t\tfile [channel] [peer]"
 	print "display channel chat:\t\tchat [channel]"
 	print "create a new channel:\t\tcreate [channel name] [password] [nickname]"
 	print "join a channel:\t\t\tjoin [channel] [peer host] [nickname]"
-	print "see channels hosted by peer:\tchannels [peer]"
-	print "see peers on a channel:\t\tpeers [channel]"
-	print "see channel join requests:\trequests [channel]"
+	print "show channels hosted by peer:\tchannels [peer]"
+	print "show channels you are hosting:\thosting"
+	print "show peers on a channel:\t\tpeers [channel]"
+	print "show channel join requests:\trequests [channel]"
 	print "accept channel join request:\taccept [channel] [peer]"
 	print "leave a channel:\t\tleave [channel]"
 	print "close the application:\t\texit"
@@ -346,6 +376,13 @@ def hosting_channel(channel):
 		print "Not currently hosting channel", channel
 		return False
 
+def hosting_channels():
+	if hosted_channels:
+		return True
+	else:
+		print "Not hosting any channels."
+		return False
+
 def join_request_exists(channel):
 	requests = join_requests[channel]
 	if len(requests) != 0:
@@ -369,14 +406,27 @@ def peer_on_channel(channel, peer):
 		print "Error:", peer, "is not on channel", channel
 		return False
 
+
+def any_peers_online():
+	if peers_online:
+		return True
+	else:
+		print "No peers online"
+		return False	
+
 def peer_online(peer):
 	if peer in peers_online.keys():
 		return True
 	else:
 		print "Error:", peer, "is not online"
 
+def print_arguments_error():
+	print "Error: invalid command arguments"
+	print 'For list of commands and arguments, type "help"'
+
 def print_command_error():
 	print "Error: command not recognised."
+	print 'For list of commands and arguments, type "help"'
 		
 ####################################################################
 
@@ -384,6 +434,7 @@ display_welcome_message()
 
 user_name = raw_input("Please enter your username: ")
 protocol = raw_input("Please eneter your preferred protocol: ")
+print 'Type "help" for more information'
 print ""
 
 while (1):

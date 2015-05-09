@@ -261,7 +261,7 @@ def send_channel_message(channel, message):
 
 def send_private_message(channel, peer, message):
 	pass
-	
+
 def send_file(channel, peer, path_to_file):
 	pass
 

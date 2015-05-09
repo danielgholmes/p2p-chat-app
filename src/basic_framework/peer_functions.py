@@ -8,6 +8,7 @@ Created on Mon May 04 20:03:21 2015
 import socket
 import pickle
 import threading 
+import time
 
 """Data containers"""
 #A dictionary maintained by the indexing server
@@ -72,6 +73,7 @@ def _launch_user_global_listner():
 
 def _create_connection_to_listner(channel_name, peer_IP_address, 
                                   peer_port_num, send_command):
+                                      
     peer_con = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
         peer_con.connect((peer_IP_address, peer_port_num))
@@ -79,6 +81,7 @@ def _create_connection_to_listner(channel_name, peer_IP_address,
     finally:
         global channel_connections
         channel_connections[channel_name].append(peer_con)
+        print "Connection in channel - "+channel_name+" succesful!"
     pass
             
 def _create_listening_connection(channel_name, password, user_nik):
@@ -96,7 +99,7 @@ def _create_listening_connection(channel_name, password, user_nik):
         port_count[0] += 1
         
         while 1:
-            listen_connection.listen(3)
+            listen_connection.listen(1)
             #Check incoming message
             conn, addr = listen_connection.accept()
             
@@ -105,8 +108,11 @@ def _create_listening_connection(channel_name, password, user_nik):
                 
                 #A trusted peer sends a message -> Short validation and save text
                 if addr[0] in _trusted_address.keys():
+                    global channel_text
                     channel_text[channel_name].append(
-                    _trusted_address[addr[0]] + " :" + _connection_command[0])
+                    _trusted_address[addr[0]] + ": " + _connection_command[0])
+                    #Test - got into if statement
+                    print "recorded text"
                 
                 #The correct peer has responded
                 #_connection_command: password, IP addr, port, peer_nik
@@ -131,7 +137,7 @@ def _create_listening_connection(channel_name, password, user_nik):
                         #Store this connection in channel_connections dict.
                         channel_connections[channel_name].append(out_conn)
                         channel_text[channel_name].append(_connection_command[3] + 
-                                                          "Joined the channel.")
+                                                          " Joined the channel.")
                         
                         
     pass
@@ -262,7 +268,8 @@ def _join_channel(channel_name, user_nickname):
     _send_command = []
     _send_command.append(_received_channel_password)
     _send_command.append(user_IP_address)
-    _send_command.append(port_count[0]-1)
+    _send_command.append(port_count[0]-1)#Check
+    _send_command.append(user_nickname)
     for peer in _contact_dictionary:
         #Create connection to peer
         _create_connection_to_listner(channel_name, peer[0], 
@@ -270,17 +277,29 @@ def _join_channel(channel_name, user_nickname):
 
     pass
 
-#TODO functions
-def _display_channel_text(channel_name):
-    pass
-
-def _list_peer_channels(peer_name):
+def _launch_message_send(channel_name, text):
+    _send_message = []
+    _send_message.append(text)
+    
+    #Send message to all connections
+    for peer in channel_dict[channel_name]:
+        message_connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        message_connection.connect((peer[0],peer[1]))
+        message_connection.send(pickle.dumps(_send_message))
+    #Test 
+    print "All messages sent" 
     pass
 
 def _write_text_to_channel(channel_name, text):
+    #Launch a thread to perform writing opperation to all peers in channel
+    threading.Thread(target=_launch_message_send, args=(channel_name,),
+                     kwargs={'text':text}).start() 
     pass
 
-    
+#TODO functions
+def _list_peer_channels(peer_name):
+    pass
+
 """------------------------end private functions----------------------------"""
         
 """-------------------------Public functions--------------------------------"""
@@ -305,10 +324,12 @@ def create_channel(channel, password, nick_name):
 _initilize_user("Jon", "TCP")
 create_channel("TestChan", "easy", "Gerrand")
 create_channel("Bobby_channel", "peasy", "David")
-_join_channel("TestChan", "squiddle")        
-        
-        
-        
+_join_channel("TestChan", "squiddle")
+_write_text_to_channel("TestChan", "This is a big, fluffy dog :)")
+time.sleep(1)
+_write_text_to_channel("TestChan", "It is a cute dog.") 
+time.sleep(1)      
+
         
         
         

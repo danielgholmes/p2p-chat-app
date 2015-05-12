@@ -287,9 +287,10 @@ def join_channel(channel, peer, nick_name):
     _join_channel(channel, nick_name)
     pass
 
-#TODO command
+
 def leave_channel(channel):
-	pass
+    _leave_channel(channel)
+    pass
 #TODO command... will probably have to be internal to the thread already
 def accept_join_request(channel, peer):
 	pass
@@ -379,13 +380,21 @@ def _create_listening_connection(channel_name, password, user_nik):
             if conn != None:
                 _connection_command = pickle.loads(conn.recv(BUFFER_SIZE))
                 
-                #A trusted peer sends a message -> Short validation and save text
+                #A trusted peer sends a message
                 if addr[0] in _trusted_address.keys():
                     global channel_text
-                    channel_text[channel_name].append(
-                    _trusted_address[addr[0]] + ": " + _connection_command[0])
-                    #Test - got into if statement
-                    print "recorded text"
+                    
+                    #Resolve into channel messages and private messages
+                    if _connection_command[0] == "MSGCH":
+                        #Channel Message
+                        channel_text[channel_name].append(
+                        _trusted_address[addr[0]] + ": " + _connection_command[1])
+                    
+                    if _connection_command[0] == "MSGUSER":
+                        #Private Message
+                        channel_text[channel_name].append(
+                        _trusted_address[addr[0]] + " <Private>: " + 
+                        _connection_command[1])
                 
                 #The correct peer has responded
                 #_connection_command: password, IP addr, port, peer_nik, user_name
@@ -411,7 +420,21 @@ def _create_listening_connection(channel_name, password, user_nik):
                         #Record the new peer on the channel
                         channel_text[channel_name].append(_connection_command[3] +
                                                           "("+_connection_command[4]+")"
-                                                          " Joined the channel.")                 
+                                                          " Joined the channel.") 
+                                                          
+                #A peer decides to quit the channel
+                if _connection_command[0] == "QUIT":
+                    if addr[0] in _trusted_address.keys():
+                        #iterate through peers to delete the correct one
+                        for peer in channel_dict[channel_name]:
+                            if addr[0] in peer:
+                                channel_peers[channel_name].remove(peer[2])
+                                channel_dict[channel_name].remove(peer)
+                    
+                     #Kill the listening connection for the channel
+                    if addr[0] == user_IP_address:
+                        listen_connection.shutdown()
+                
     pass
 
 """This method launches a thread containing a server to which all initial 
@@ -445,6 +468,9 @@ def _launch_channel_manager(name, password, user_nik):
         channel_text[name] = []
         channel_text[name].append("== " + user_name + " Created: '"+ 
                                   name +"' ===" )
+        #Add this channel to current channel_connections
+        global channel_connections
+        channel_connections[name] = "Active"
     
     #Wait for peers to chat
     while 1:
@@ -515,7 +541,7 @@ def _retrieve_peer_channels(peer_name):
     query_connection.send(pickle.dumps(_send_message))
     
     #Wait for peer reply
-    while len(_peer_hosted_channels == 0):
+    while len(_peer_hosted_channels) == 0:
         try:
             _peer_hosted_channels = pickle.loads(query_connection.recv(BUFFER_SIZE))
         except EOFError:
@@ -556,9 +582,12 @@ def _join_channel(channel_name, user_nickname):
                 pass
             
             #Unpack received response
+            #Request was successful
             if _received_command[0] == "PASS":
                 _received_channel_password = _received_command[1]
                 _contact_dictionary = _received_command[2]
+                global channel_connections
+                channel_connections[channel_name] = "Active"
             else: 
                 print "Your request to join: " + channel_name + ", has been rejected" 
                 
@@ -573,7 +602,7 @@ def _join_channel(channel_name, user_nickname):
     _send_command.append(user_IP_address)
     _send_command.append(port_count[0]-1)#Check
     _send_command.append(user_nickname)
-    _senf_command.append(user_name)
+    _send_command.append(user_name)
     for peer in _contact_dictionary:
         #Create connection to peer
         _create_connection_to_listner(channel_name, peer[0], 
@@ -586,13 +615,16 @@ def _join_channel(channel_name, user_nickname):
 def _launch_message_send(channel_name, text):
     #Fill message container to send text to a channel
     _send_message = []
+    _send_message.append("MSGCH")
     _send_message.append(text)
     
     #Send message to all connections
     for peer in channel_dict[channel_name]:
         message_connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        message_connection.connect((peer[0],peer[1]))
-        message_connection.send(pickle.dumps(_send_message))
+        try:
+            message_connection.connect((peer[0],peer[1]))
+        finally:
+            message_connection.send(pickle.dumps(_send_message))
     #Test 
     print "All messages sent" 
     pass
@@ -602,23 +634,51 @@ def _launch_message_send(channel_name, text):
 def _launch_private_message_send(channel_name, peer_name, text):
     #Fill message container to send text to a peer
     _send_message = []
+    _send_message.append("MSGUSER")
     _send_message.append(text)
     
     #Iterate through channel to find correct user to send message to 
     for peer in channel_dict[channel_name]:
         if peer[2] == peer_name:
             message_connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            try:
+                message_connection.connect((peer[0],peer[1]))
+            finally:
+                message_connection.send(pickle.dumps(_send_message))            
+                break
+    pass
+
+"""Create a thread initiating a quiting process from a current channel"""
+def _launch_channel_exit_process(channel_name):
+    _send_message = []
+    _send_message.append("QUIT")
+    
+    #Iterate through channel and send quit command to all peers 
+    for peer in channel_dict[channel_name]:
+        message_connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:    
             message_connection.connect((peer[0],peer[1]))
-            message_connection.send(pickle.dumps(_send_message))            
-            #Test 
-            print "All messages sent" 
-            break
+        finally:
+            message_connection.send(pickle.dumps(_send_message))
+    
+    #Delete own container data
+    del channel_dict[channel_name]
+    del channel_connections[channel_name]
+    del channel_peers[channel_name]
+        
+    pass
+
+"""Exit a specified channel. This terminates all records of listening channels
+as well as the personal listner for the channel"""
+def _leave_channel(channel_name):
+    threading.Thread(target=_launch_channel_exit_process, 
+                     args=(channel_name,)).start()    
     pass
 
 """Write given text to a single peer on the network"""
 def _write_text_to_peer(channel_name, peer_name, text):
     threading.Thread(target=_launch_private_message_send, args=(channel_name,),
-                     kwargs={'peer_name':peer_name, 'text':text})
+                     kwargs={'peer_name':peer_name, 'text':text}).start()
     pass
 
 """Write given text to a specific channel"""
@@ -633,31 +693,29 @@ def _write_text_to_channel(channel_name, text):
    address for a server you want to be seen from, such as a server on the local network.
    ASSUMES NO PROXY"""
 def _get_user_ip_address():
-	server = '8.8.8.8' 
-	s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-	s.connect((server, 0))
-	user_IP_address = s.getsockname()[0]
-	pass
-
-#TODO functions
-def _list_peer_channels(peer_name):
+    server = '8.8.8.8' 
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.connect((server, 0))
+    global user_IP_address
+    user_IP_address = s.getsockname()[0]
     pass
 
 ############################################################
 
 def show_channel_chat(channel):
-	chat = channel_chat[channel]
+	chat = channel_dict[channel]
 	print "Chat for channel", channel
 	for c in chat:
 		print c
 	pass
 
 def show_peer_channels(peer):
-	channels = available_channels[peer]
-	print "Channels hosted by", peer
-	for c in channels:
-		print c
-	pass
+    _retrieve_peer_channels(peer)
+    channels = available_channels[peer]
+    print "Channels hosted by", peer
+    for c in channels[0].keys():
+        print c
+    pass
 
 def show_channel_peers(channel):
 	peers = channel_peers[channel]
@@ -724,7 +782,7 @@ def connected_to_channel(channel):
 def channel_available(channel, peer):
 	if peer in available_channels.keys():
 		channels = available_channels[peer]
-		if channel in channels:
+		if channel in channels[0].keys():
 			return True
 		else:
 			print "Error:", peer, "is not hosting channel", channel

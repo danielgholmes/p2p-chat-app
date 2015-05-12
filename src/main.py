@@ -18,6 +18,7 @@ user_name = "Test_run_user" # changed from "Jon"
 #The current IP address of the user
 user_IP_address = "127.0.0.1" # changed from 127.0.0.1
 #A counter tracking the ports currently used
+#Non-primative so that this can be used for threading
 port_count = [5005]
 
 #A dictionary maintained by the indexing server
@@ -301,6 +302,7 @@ def accept_join_request(channel, peer):
    as well as starting the user global listner.
    """
 def _initilize_user(user_name, protocol):
+	#_get_user_ip_address() Will use when testing on the network
     #Launch user global listner
     threading.Thread(target=_launch_user_global_listner, args=()).start()   
     #Update peer dict
@@ -335,6 +337,9 @@ def _launch_user_global_listner():
                 _returned_command.append(hosted_channels)
                 conn.send(pickle.dumps(_returned_command))
     pass
+
+def _launch_file_receiver():
+	pass
 
 """Inform all peers on network of having joined the channel"""
 def _create_connection_to_listner(channel_name, peer_IP_address, 
@@ -623,9 +628,22 @@ def _write_text_to_channel(channel_name, text):
                      kwargs={'text':text}).start() 
     pass
 
-############################################################
+"""Using Google's DNS server. This is better because you don't have to worry about
+   relying on DNS servers, which also means it's faster. One could swap this IP 
+   address for a server you want to be seen from, such as a server on the local network.
+   ASSUMES NO PROXY"""
+def _get_user_ip_address():
+	server = '8.8.8.8' 
+	s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+	s.connect((server, 0))
+	user_IP_address = s.getsockname()[0]
+	pass
 
-# perhaps add a command so show all channels that the user is hosting
+#TODO functions
+def _list_peer_channels(peer_name):
+    pass
+
+############################################################
 
 def show_channel_chat(channel):
 	chat = channel_chat[channel]

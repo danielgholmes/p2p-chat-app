@@ -264,9 +264,10 @@ def process_command(command):
 def send_channel_message(channel, message):
     _write_text_to_channel(channel, message)
     pass
-#TODO command
+
 def send_private_message(channel, peer, message):
-	pass
+    _write_text_to_peer(channel,peer,message)
+    pass
 #TODO command
 def send_file(channel, peer, path_to_file):
 	pass
@@ -611,6 +612,8 @@ def _launch_private_message_send(channel_name, peer_name, text):
 
 """Write given text to a single peer on the network"""
 def _write_text_to_peer(channel_name, peer_name, text):
+    threading.Thread(target=_launch_private_message_send, args=(channel_name,),
+                     kwargs={'peer_name':peer_name, 'text':text})
     pass
 
 """Write given text to a specific channel"""

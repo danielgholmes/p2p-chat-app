@@ -1,0 +1,2 @@
+ - Individuals always use their same username, however they change their nicknames. 
+- A users connection is persistent and does not drop throughout the session. 

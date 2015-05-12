@@ -362,7 +362,7 @@ def _create_listening_connection(channel_name, password, user_nik):
     finally:
         #channel_dict: IP addr, port
         channel_dict[channel_name].append([user_IP_address, 
-                                           port_count[0]])
+                                           port_count[0],user_name])
         port_count[0] += 1
         
         while 1:
@@ -382,7 +382,7 @@ def _create_listening_connection(channel_name, password, user_nik):
                     print "recorded text"
                 
                 #The correct peer has responded
-                #_connection_command: password, IP addr, port, peer_nik
+                #_connection_command: password, IP addr, port, peer_nik, user_name
                 if _connection_command[0] == password:
                     _trusted_address[addr[0]] = _connection_command[3]
                     
@@ -399,11 +399,12 @@ def _create_listening_connection(channel_name, password, user_nik):
                         #IP address not in the record
                         if found != True:
                             channel_dict[channel_name].append(
-                            [_connection_command[1],_connection_command[2]])
+                            [_connection_command[1],_connection_command[2]], 
+                            _connection_command[4])
                                                           
                         #Record the new peer on the channel
                         channel_text[channel_name].append(_connection_command[3] +
-                                                          "("+user_name+")"
+                                                          "("+_connection_command[4]+")"
                                                           " Joined the channel.")                 
     pass
 
@@ -492,6 +493,34 @@ def _update_contacts(name):
     updating_connection.close()
     pass
 
+""" Send the protocol 'LISTCH' message to the global listening port 
+    of a peer and accordingly updates the channels he/she is hosting""" 
+def _retrieve_peer_channels(peer_name):
+    #Fill message container to request channel users
+    _send_message = []
+    _send_message.append("LISTCH")
+    #Container for recieved hosted channels
+    _peer_hosted_channels = []
+    
+    #Create connection for channel request
+    query_connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    #Using user global listening port
+    query_connection.connect((peers_online[peer_name], 5000))
+    query_connection.send(pickle.dumps(_send_message))
+    
+    #Wait for peer reply
+    while len(_peer_hosted_channels == 0):
+        try:
+            _peer_hosted_channels = pickle.loads(query_connection.recv(BUFFER_SIZE))
+        except EOFError:
+            pass
+    
+    #Fill the availible channels container with the received data.
+    global available_channels
+    available_channels[peer_name] = _peer_hosted_channels
+
+    pass
+
 """This method is used by the peer to join an existing channel hosted by another
    peer"""
 def _join_channel(channel_name, user_nickname):
@@ -538,6 +567,7 @@ def _join_channel(channel_name, user_nickname):
     _send_command.append(user_IP_address)
     _send_command.append(port_count[0]-1)#Check
     _send_command.append(user_nickname)
+    _senf_command.append(user_name)
     for peer in _contact_dictionary:
         #Create connection to peer
         _create_connection_to_listner(channel_name, peer[0], 
@@ -548,6 +578,7 @@ def _join_channel(channel_name, user_nickname):
 """This is a thread which is responsible for delivering the text argument
    to all peers listed within a given channel."""
 def _launch_message_send(channel_name, text):
+    #Fill message container to send text to a channel
     _send_message = []
     _send_message.append(text)
     
@@ -560,15 +591,33 @@ def _launch_message_send(channel_name, text):
     print "All messages sent" 
     pass
 
+"""Create a thread which will send a single private message to a peer who
+    is on the same channel as the user"""
+def _launch_private_message_send(channel_name, peer_name, text):
+    #Fill message container to send text to a peer
+    _send_message = []
+    _send_message.append(text)
+    
+    #Iterate through channel to find correct user to send message to 
+    for peer in channel_dict[channel_name]:
+        if peer[2] == peer_name:
+            message_connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            message_connection.connect((peer[0],peer[1]))
+            message_connection.send(pickle.dumps(_send_message))            
+            #Test 
+            print "All messages sent" 
+            break
+    pass
+
+"""Write given text to a single peer on the network"""
+def _write_text_to_peer(channel_name, peer_name, text):
+    pass
+
 """Write given text to a specific channel"""
 def _write_text_to_channel(channel_name, text):
     #Launch a thread to perform writing opperation to all peers in channel
     threading.Thread(target=_launch_message_send, args=(channel_name,),
                      kwargs={'text':text}).start() 
-    pass
-
-#TODO functions
-def _list_peer_channels(peer_name):
     pass
 
 ############################################################

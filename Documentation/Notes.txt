@@ -1,0 +1,2 @@
+- Change sever to have try/catch for transmitting to terminated connections
+- A channel host must not join his own channel! -> Will clear channel dict.

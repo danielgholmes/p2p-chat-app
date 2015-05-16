@@ -17,9 +17,9 @@ protocol = ""
 #Name of the peer for this session
 user_name = "Test_run_user" # changed from "Jon"
 #The current IP address of the user
-user_IP_address = "10.0.0.4" # changed from 127.0.0.1
+user_IP_address = "146.141.125.48" # changed from 127.0.0.1
 #Remote Servers Address
-SERVER_IP_ADDRESS = "10.0.0.3"
+SERVER_IP_ADDRESS = "146.141.125.48"
 #A counter tracking the ports currently used
 #Non-primative so that this can be used for threading
 port_count = [6005]

@@ -466,7 +466,7 @@ def _launch_file_send(channel, peer, filename, protocol):
 					_send_file_udp(receiving_peer_ip, receiving_port, filename)
 
 				else:
-					"Protocol error."
+					print "Protocol error."
 			else:
 				print "File receiver error."
 

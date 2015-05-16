@@ -4,6 +4,7 @@ __authors__ = "Daniel Holmes 551240 and Jonathan Gerrand 349361"
 import socket
 import pickle
 import threading 
+import time 
 
 """Constants"""
 
@@ -16,19 +17,28 @@ protocol = ""
 #Name of the peer for this session
 user_name = "Test_run_user" # changed from "Jon"
 #The current IP address of the user
-user_IP_address = "127.0.0.1" # changed from 127.0.0.1
+user_IP_address = "10.0.0.4" # changed from 127.0.0.1
+#Remote Servers Address
+SERVER_IP_ADDRESS = "10.0.0.3"
 #A counter tracking the ports currently used
 #Non-primative so that this can be used for threading
-port_count = [5005]
+port_count = [6005]
 
 #A dictionary maintained by the indexing server
 #key: peer, ip address
 peers_online = {} #changed from peer_dict
 
 #A dictionary containing the names of all peers currently on a channel.
+#This is maintained by the Channel Host
 #This container is only shared with trusted peers
 #key: channel, list: peers
-channel_dict = {}
+manager_channel_dict = {}
+
+#A dictionary containing the names of all peers currently on a channel.
+#This is maintained by the individual user
+#This container is only shared with trusted peers
+#key: channel, list: peers
+user_channel_dict = {}
 
 #Container of current channels hosted by user
 #key: channel, list: peers and ports
@@ -57,6 +67,9 @@ join_requests = {}
 #All channel chat
 #key: channel list: chat 
 channel_chat = {}
+
+#Testing flag
+test_flag = [0]
 
 def display_welcome_message():
 	print "Welcome to the P2P Chat Application!"
@@ -100,20 +113,18 @@ def process_command(command):
 			else:
 				return
 
-	# """Changed"""
 	elif base_command == "file":
-		if len(command_array) !=  4:
+		if len(command_array) !=  3:
 			print_arguments_error()
 			return
 		else:
 			channel = command_array[1]
 			peer = command_array[2]
-			protocol = command_array[3]
 			if connected_to_channel(channel):
 				if peer_on_channel(channel, peer):
-					filename = raw_input("File name: ")
-					send_file(channel, peer, filename, protocol)
-					print "Sent file from", filename, "to", peer, "on channel", channel, "by", protocol
+					path_to_file = raw_input("File path: ")
+					send_file(channel, peer, path_to_file)
+					print "Sent file from", path_to_file, "to", peer, "on channel"
 				else:
 					return
 			else:
@@ -271,6 +282,9 @@ def send_channel_message(channel, message):
 def send_private_message(channel, peer, message):
     _write_text_to_peer(channel,peer,message)
     pass
+#TODO command
+def send_file(channel, peer, path_to_file):
+	pass
 
 def create_channel(channel, password, nick_name):
     try:
@@ -283,7 +297,7 @@ def create_channel(channel, password, nick_name):
     pass
 
 def join_channel(channel, peer, nick_name):
-    _join_channel(channel, nick_name)
+    _join_channel(channel, peer, nick_name)
     pass
 
 
@@ -313,7 +327,7 @@ def _initilize_user(user_name, protocol):
 def _launch_user_global_listner():
     _recieved_command = None
     _user_global_listner = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    _user_global_listner.bind((user_IP_address,5000))
+    _user_global_listner.bind((user_IP_address,6000))
     
     while 1:
         #Accept global peer messages
@@ -361,13 +375,15 @@ def _create_listening_connection(channel_name, password, user_nik):
     #connection variables
     _connection_command = None
     _trusted_address = {}
+    user_channel_dict[channel_name] = []
 
     try:
+        current_port = port_count[0]
         listen_connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         listen_connection.bind((user_IP_address, port_count[0]))
     finally:
         #channel_dict: IP addr, port
-        channel_dict[channel_name].append([user_IP_address, 
+        user_channel_dict[channel_name].append([user_IP_address, 
                                            port_count[0],user_name])
         port_count[0] += 1
         
@@ -399,22 +415,25 @@ def _create_listening_connection(channel_name, password, user_nik):
                 #_connection_command: password, IP addr, port, peer_nik, user_name
                 if _connection_command[0] == password:
                     _trusted_address[addr[0]] = _connection_command[3]
+                    send_command = []
+                    send_command.append([password, user_IP_address, current_port, user_nik, user_name])
                     
                     #Create an outward connection to peer
                     try:
                         out_conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                         out_conn.connect((_connection_command[1], _connection_command[2]))
+                        out_conn.send(pickle.dumps(send_command))
                     finally:
                         #Update the channel dict if user is not already recorded
                         found = False
-                        for item in channel_dict[channel_name]:
+                        for item in user_channel_dict[channel_name]:
                             if addr[0] in item:
                                 found = True
                         #IP address not in the record
                         if found != True:
-                            channel_dict[channel_name].append(
-                            [_connection_command[1],_connection_command[2]], 
-                            _connection_command[4])
+                            user_channel_dict[channel_name].append(
+                                            [_connection_command[1],_connection_command[2], 
+                                             _connection_command[4]])
                                                           
                         #Record the new peer on the channel
                         channel_text[channel_name].append(_connection_command[3] +
@@ -425,10 +444,10 @@ def _create_listening_connection(channel_name, password, user_nik):
                 if _connection_command[0] == "QUIT":
                     if addr[0] in _trusted_address.keys():
                         #iterate through peers to delete the correct one
-                        for peer in channel_dict[channel_name]:
+                        for peer in user_channel_dict[channel_name]:
                             if addr[0] in peer:
                                 channel_peers[channel_name].remove(peer[2])
-                                channel_dict[channel_name].remove(peer)
+                                user_channel_dict[channel_name].remove(peer)
                     
                      #Kill the listening connection for the channel
                     if addr[0] == user_IP_address:
@@ -444,22 +463,25 @@ def _launch_channel_manager(name, password, user_nik):
     #channel variables
     _channel_command = None
     #Update the channel dict
-    channel_dict[name] = []
+    manager_channel_dict[name] = []
     
     try:
         #Create channel server (TCP)
+        
         channel_manager = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
         channel_manager.bind((user_IP_address, port_count[0]))
         hosted_channels[name] = [user_IP_address, port_count[0]]
         port_count[0] += 1 #increment used ports
-        
+        current_port = port_count[0]
         #Launch listening connection on a thread.
-        #Channel_dict is updated herein.
+        #User_channel_dict is updated herein.
         threading.Thread(target=_create_listening_connection,args=(name,),
                          kwargs={'password':password, 'user_nik': user_nik}).start()
         
     finally:
         #If binding was successful       
+        #Update the manager channel dict
+        manager_channel_dict[name].append([user_IP_address, current_port, user_name])
         #Add hosting peer to the list of people on the chat
         channel_peers[name] = []
         channel_peers[name].append(user_name)
@@ -484,12 +506,13 @@ def _launch_channel_manager(name, password, user_nik):
             #--Evaluate command--
             #Command structure - command, channel_name, peer's name
             if (_channel_command[0] == "JOIN") and (_channel_command[1] == name):
+               test_flag[0] = 1
                #Successful -> Must make decision to let peer join!!
                #TODO Include functionality for a rejection command
                _reply_command = []
                _reply_command.append("PASS")
                _reply_command.append(password)
-               _reply_command.append(channel_dict[name])
+               _reply_command.append(manager_channel_dict[name])
                conn.send(pickle.dumps(_reply_command))
                pass
                 
@@ -507,7 +530,7 @@ def _update_contacts(name):
     command_list.append(name)
     updating_connection = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
     #This was set for the default LAN network
-    updating_connection.connect(("127.0.0.1", 5001))
+    updating_connection.connect((SERVER_IP_ADDRESS, 6001))
     updating_connection.send(pickle.dumps(command_list))
     
     global peers_online
@@ -536,7 +559,7 @@ def _retrieve_peer_channels(peer_name):
     #Create connection for channel request
     query_connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     #Using user global listening port
-    query_connection.connect((peers_online[peer_name], 5000))
+    query_connection.connect((peers_online[peer_name], 6000))
     query_connection.send(pickle.dumps(_send_message))
     
     #Wait for peer reply
@@ -554,7 +577,7 @@ def _retrieve_peer_channels(peer_name):
 
 """This method is used by the peer to join an existing channel hosted by another
    peer"""
-def _join_channel(channel_name, user_nickname):
+def _join_channel(channel_name, peer_name, user_nickname):
     #Channel variables
     _received_channel_password = ""
     _received_command = []
@@ -565,10 +588,15 @@ def _join_channel(channel_name, user_nickname):
     _send_command.append("JOIN")
     _send_command.append(channel_name)
     
+    #TODO Get channel from availible channels
+    for channel in available_channels[peer_name]:
+        if channel_name in channel.keys():
+            target_channel = channel
+    
     #Send request to channel host
     join_conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
-        join_conn.connect((hosted_channels[channel_name][0], hosted_channels[channel_name][1]))
+        join_conn.connect((target_channel[channel_name][0], target_channel[channel_name][1]))
     finally:
         join_conn.send(pickle.dumps(_send_command))
         
@@ -591,15 +619,17 @@ def _join_channel(channel_name, user_nickname):
                 print "Your request to join: " + channel_name + ", has been rejected" 
                 
     #Launch personal listening server thread for the channel
+    current_port = port_count[0]
     threading.Thread(target=_create_listening_connection, args=(channel_name,),
                      kwargs={'password':_received_channel_password, 
                      'user_nik':user_nickname}).start()
     
     #Establish connections to all peers in channel
+    time.sleep(0.5)
     _send_command = []
     _send_command.append(_received_channel_password)
     _send_command.append(user_IP_address)
-    _send_command.append(port_count[0]-1)#Check
+    _send_command.append(current_port)#Check
     _send_command.append(user_nickname)
     _send_command.append(user_name)
     for peer in _contact_dictionary:
@@ -618,7 +648,7 @@ def _launch_message_send(channel_name, text):
     _send_message.append(text)
     
     #Send message to all connections
-    for peer in channel_dict[channel_name]:
+    for peer in user_channel_dict[channel_name]:
         message_connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
             message_connection.connect((peer[0],peer[1]))
@@ -627,92 +657,6 @@ def _launch_message_send(channel_name, text):
     #Test 
     print "All messages sent" 
     pass
-
-"""Added"""
-"""Assumes the file is located in the same folder as the program folder."""
-def _launch_file_send(channel, peer, filename, protocol):
-	_send_message = []
-	_send_message.append("FILE")
-	_send_message.append(filename)
-	_send_message.append(protocol)
-	_send_message.append(port_count[0])
-
-	receiving_peer_ip = peer_online[peer]
-	for sublist in channel_dict[channel]:
-		if sublist[0] == receiving_peer_ip:
-			peer_listening_port = sublist[1]
-
-	#Tell the listening connection at the receiver that you want to send a file
-	try:
-		file_send_indicator = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-		file_send_indicator.connect((receiving_peer_ip, peer_listening_port))
-	finally:
-		file_send_indicator.send(pickle.dumps(_send_message))
-
-	#wait for response from receiver 
-	try:
-		response_receiver = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-		response_receiver.bind((user_IP_address, port_count[0]))
-		port_count[0] += 1 #won't we run out of ports?
-	finally:
-		response_receiver.listen(1)
-		conn, addr = response_receiver.accept() #a timeout would be good here
-
-		if conn != None:
-			#_receiver_response: FILE, filename, protocol, file receiving port
-			receiver_response = pickle.loads(conn.recv(BUFFER_SIZE))
-
-			receiving_port = receiver_response[3]
-			#validates that the receiver will be receiving the correct file
-			if receiver_response[0] == "FILE" and receiver_response[1] == filename:
-				if protocol == "tcp" and receiver_response[2] == "tcp":
-					_send_file_tcp(receiving_peer_ip, receiving_port, filename)
-
-				elif protocol == "upd" and receiver_response[3] == "udp":
-					_send_file_udp(receiving_peer_ip, receiving_port, filename)
-
-				else:
-					print "Protocol error."
-			else:
-				print "File receiver error."
-
-	pass
-
-"""Added"""
-def _send_file_tcp(ip_address, port, filename):
-	try:
-		file_sender = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-		file_sender.connect((ip_address, port))
-	finally:
-		f = open(filename,'rb')
-		print "Sending..."
-		seg = f.read(BUFFER_SIZE)
-		while (seg):
-		    print "Sending..."
-		    file_sender.send(seg)
-		    seg = f.read(BUFFER_SIZE)
-		print "File sent by TCP."
-		f.close()
-		file_sender.shutdown(socket.SHUT_WR)
-		file_sender.close()	
-	pass
-
-"""Added"""
-def _send_file_udp(ip_address, port, filename):
-	try:
-		file_sender = socket.socket(( socket.AF_INET, socket.SOCK_DGRAM)) 
-	finally:
-		f = open(filename, 'rb')
-		seg = f.read(BUFFER_SIZE)
-		while(seg):
-			print "Sending..."
-			file_sender.sendto(seg, (ip_address, port))
-			seg = f.read(BUFFER_SIZE)
-		print "File sent by UDP."
-		f.close()
-		file_sender.close()
-	pass
-
 
 """Create a thread which will send a single private message to a peer who
     is on the same channel as the user"""
@@ -723,7 +667,7 @@ def _launch_private_message_send(channel_name, peer_name, text):
     _send_message.append(text)
     
     #Iterate through channel to find correct user to send message to 
-    for peer in channel_dict[channel_name]:
+    for peer in user_channel_dict[channel_name]:
         if peer[2] == peer_name:
             message_connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             try:
@@ -739,7 +683,7 @@ def _launch_channel_exit_process(channel_name):
     _send_message.append("QUIT")
     
     #Iterate through channel and send quit command to all peers 
-    for peer in channel_dict[channel_name]:
+    for peer in user_channel_dict[channel_name]:
         message_connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:    
             message_connection.connect((peer[0],peer[1]))
@@ -747,7 +691,7 @@ def _launch_channel_exit_process(channel_name):
             message_connection.send(pickle.dumps(_send_message))
     
     #Delete own container data
-    del channel_dict[channel_name]
+    del user_channel_dict[channel_name]
     del channel_connections[channel_name]
     del channel_peers[channel_name]
         
@@ -785,25 +729,13 @@ def _get_user_ip_address():
     user_IP_address = s.getsockname()[0]
     pass
 
-"""Added"""
-def _send_file(channel, peer, filename, protocol):
-	#Lanuch thread to send file to channel
-    threading.Thread(target=_launch_file_send, args=(channel,),
-                     kwargs={'peer': peer, 'filename': filename, 'protocol': protocol}).start() 
-
 ############################################################
 
 def show_channel_chat(channel):
-	chat = channel_dict[channel]
+	chat = channel_text[channel]
 	print "Chat for channel", channel
 	for c in chat:
 		print c
-	pass
-
-
-"""Added"""
-def send_file(channel, peer, filename):
-	_send_file(channel, peer, filename)
 	pass
 
 def show_peer_channels(peer):
@@ -854,7 +786,7 @@ def show_help():
 	print "show which peers are online:\tonline"
 	print "send message on channel:\tmsg [channel]"
 	print "send private message:\t\tpvt [channel] [peer]"
-	print "send a file:\t\t\tfile [channel] [peer] [protocol]"
+	print "send a file:\t\t\tfile [channel] [peer]"
 	print "display channel chat:\t\tchat [channel]"
 	print "create a new channel:\t\tcreate [channel name] [password] [nickname]"
 	print "join a channel:\t\t\tjoin [channel] [peer host] [nickname]"

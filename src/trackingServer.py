@@ -4,10 +4,11 @@ import socket
 import pickle
 
 userIPList = {}
+SERVER_ADDRESS = "146.141.125.48"
 
 tracServer = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 #Currently set for Jonathan's PC
-tracServer.bind(("127.0.0.1",5001))
+tracServer.bind((SERVER_ADDRESS,6001))
 while(1):
 
     tracServer.listen(3)
@@ -29,10 +30,13 @@ while(1):
             _sent_command.append("UPDATE")
             _sent_command.append(userIPList)            
             for user_name in userIPList:
-                _update_connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                _update_connection.connect((userIPList[user_name], 5000))
-                _update_connection.send(pickle.dumps(_sent_command))
-                _update_connection.close()
+                try:
+                    _update_connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    _update_connection.connect((userIPList[user_name], 6000))
+                    _update_connection.send(pickle.dumps(_sent_command))
+                    _update_connection.close()
+                except socket.error:
+                    print "Users offline"
             pass
         
         if recv_command_list[0] == "GOODBYE":
